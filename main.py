@@ -318,6 +318,7 @@ class MainWidget(QtWidgets.QWidget):
     
     ##切换主题
     def light_theme(self):
+        
         qdarktheme.setup_theme("light")
     def dark_theme(self):
         qdarktheme.setup_theme("dark")
@@ -366,7 +367,7 @@ class MainWidget(QtWidgets.QWidget):
         circuit_pic.setPixmap(pic)
         self.pic.setWidget(circuit_pic)
     ##画电路
-    def painter(self):
+    def painter(self, new = 0):
         if hasattr(self, "circuit"):
             paint(self.circuit)
             pic = QPixmap("pics/circuit.png")
@@ -444,7 +445,13 @@ class MainWidget(QtWidgets.QWidget):
         re = self.circuit.del_element(index)
         if re == 0:
             return
-        self.painter()
+        if len(self.circuit.elements) != 0:
+            self.painter()
+        else:
+            pic = QPixmap("pics/new.png")
+            circuit_pic = QLabel(self)
+            circuit_pic.setPixmap(pic)
+            self.pic.setWidget(circuit_pic)
     ##计算电路
     def calculate_circuit(self):
         if not hasattr(self, "circuit"):
