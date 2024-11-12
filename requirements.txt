@@ -2,4 +2,4 @@ numpy
 matplotlib
 pyqt6
 pillow
-pqqtdarktheme
+pyqtdarktheme
