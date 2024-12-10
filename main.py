@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import matplotlib.image as mpimg
 from PyQt6 import QtWidgets
 from PyQt6.QtWidgets import QVBoxLayout, QLabel, QPushButton, QLineEdit, QComboBox, QHBoxLayout, QScrollArea, QTableWidget, QTableWidgetItem
 from PyQt6.QtGui import QPixmap, QIcon
@@ -13,70 +15,131 @@ class trans_line():
     def __init__(self, Z, length):
         self.Z = Z
         self.length = length
+        self.A = np.zeros((2, 2), dtype = complex)
+        self.cal_A()
 
     def get_Z(self):
         return self.Z
     
     def set_Z(self, Z):
         self.Z = Z
+        self.cal_A()
 
     def get_length(self):
         return self.length
     
     def set_length(self, length):
         self.length = length
+        self.cal_A()
+    
+    def cal_A(self):
+        num_1 = np.cos(2*np.pi*self.length)
+        num_2 = 1j*np.sin(2*np.pi*self.length)
+        self.A[0][0] = num_1
+        self.A[0][1] = num_2*self.Z
+        self.A[1][0] = num_2/self.Z
+        self.A[1][1] = num_1
 
 class resistor():
     #sp = 0:串联元件，sp = 1:并联元件
     def __init__(self, R, sp):
         self.R = R
         self.sp = sp
+        self.A = np.zeros((2, 2), dtype = complex)
+        self.cal_A()
 
     def get_R(self):
         return self.R
     
     def set_R(self, R):
         self.R = R
+        self.cal_A()
 
     def get_sp(self):
         return self.sp
     
     def set_sp(self, sp):
         self.sp = sp
+        self.cal_A()
+    
+    def cal_A(self):
+        if self.sp == 0:
+            self.A[0][0] = 1
+            self.A[0][1] = self.R
+            self.A[1][0] = 0
+            self.A[1][1] = 1
+        else:
+            self.A[0][0] = 1
+            self.A[0][1] = 0
+            self.A[1][0] = 1/self.R
+            self.A[1][1] = 1
 
 class capacitor():
     def __init__(self, R, sp):
         self.R = R
         self.sp = sp
+        self.A = np.zeros((2, 2), dtype = complex)
+        self.cal_A()
     
     def get_R(self):
         return self.R
     
     def set_R(self, R):
         self.R = R
+        self.cal_A()
     
     def get_sp(self):
         return self.sp
     
     def set_sp(self, sp):
         self.sp = sp
+        self.cal_A()
+    
+    def cal_A(self):
+        if self.sp == 0:
+            self.A[0][0] = 1
+            self.A[0][1] = self.R
+            self.A[1][0] = 0
+            self.A[1][1] = 1
+        else:
+            self.A[0][0] = 1
+            self.A[0][1] = 0
+            self.A[1][0] = 1/self.R
+            self.A[1][1] = 1
 
 class inductor():
     def __init__(self, R, sp):
         self.R = R
         self.sp = sp
+        self.A = np.zeros((2, 2), dtype = complex)
+        self.cal_A()
     
     def get_R(self):
         return self.R
     
     def set_R(self, R):
         self.R = R
+        self.cal_A()
     
     def get_sp(self):
         return self.sp
     
     def set_sp(self, sp):
         self.sp = sp
+        self.cal_A()
+    
+    def cal_A(self):
+        if self.sp == 0:
+            self.A[0][0] = 1
+            self.A[0][1] = self.R
+            self.A[1][0] = 0
+            self.A[1][1] = 1
+        else:
+            self.A[0][0] = 1
+            self.A[0][1] = 0
+            self.A[1][0] = 1/self.R
+            self.A[1][1] = 1
+
 ##定义电路类
 class circuit():
     def __init__(self):
@@ -191,7 +254,7 @@ def calculate(circuit, Z):
             gamma = gamma*np.exp(-4j*np.pi*length)
             z = gamma2z(gamma)
             Z = Z0*z
-                    
+
         else:
             if element.get_sp() == 0:
                 Z = Z + element.get_R()
@@ -203,19 +266,61 @@ def calculate(circuit, Z):
         results.append([z, gamma])
     
     return results
+##定义字符串到函数的转换函数
+def txt2func(txt):
+    if txt == "":
+        return lambda x: 0
+    txt = txt.replace(" ", "")
+    txt = txt.replace("*", "")
+    if "x" not in txt:
+        return lambda x: float(txt)
+    else:
+        parts = txt.split("x")
+        if parts[0] == "":
+            parts[0] = 1
+        elif parts[0] == "-":
+            parts[0] = -1
+        else:
+            parts[0] = float(parts[0])
+        if parts[1] == "":
+            parts[1] = 0
+        else:
+            parts[1] = float(parts[1])
+    return lambda x: parts[0]*x+parts[1]
+
+##定义拟合圆的函数
+def fit_circle(points):
+    x = points[:, 0]
+    y = points[:, 1]
+    A = np.vstack([x, y, np.ones(len(x))]).T
+    B = np.vstack([-x**2-y**2]).T
+    C = np.linalg.lstsq(A, B, rcond=None)[0]
+    xc = -C[0]/2
+    yc = -C[1]/2
+    R = np.sqrt(C[0]**2+C[1]**2-4*C[2])/2
+    R = R[0]
+    return xc, yc, R
+
+def move(point):
+    new_point = np.zeros(2)
+    new_point[0] = 1118 + 970 * point[0]
+    new_point[1] = 1123 - 970 * point[1]
+    return new_point
 
 class MainWidget(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.resize(600, 900)
+        self.resize(900, 600)
         self.initUI()
     
     def initUI(self):
         Icon = QIcon("pics/icon.png")
         self.setWindowIcon(Icon)
         self.setWindowTitle("微波电路计算器")
+        self.layout = QHBoxLayout()
+        self.setLayout(self.layout)
         self.layout_1 = QVBoxLayout()
-        self.setLayout(self.layout_1)
+        self.layout.addLayout(self.layout_1)
 
         ##主题部分
         self.firstline = QHBoxLayout()
@@ -302,23 +407,55 @@ class MainWidget(QtWidgets.QWidget):
         self.pic = QScrollArea()
         self.layout_1.addWidget(self.pic)
 
+        self.layout_2 = QVBoxLayout()
+        self.layout.addLayout(self.layout_2)
         ##计算部分
-        self.label4 = QLabel("开始计算,表格展示经过每个元件后的结果")
-        self.layout_1.addWidget(self.label4)
+        self.label4 = QLabel("开始计算,选择功能")
+        self.layout_2.addWidget(self.label4)
+        self.choose = QComboBox()
+        self.layout_2.addWidget(self.choose)
+        self.choose.addItem("计算散射矩阵")
+        self.choose.addItem("单值输入")
+        self.choose.addItem("函数输入")
+        self.choose.setCurrentText("单值输入")
+        ##计算散射矩阵
+        self.in_Z0 = QLineEdit()
+        self.in_Z0.setPlaceholderText("输入右端的特性阻抗,单位Omega")
+        self.layout_2.addWidget(self.in_Z0)
+        self.out_Z0 = QLineEdit()
+        self.out_Z0.setPlaceholderText("输入左端的特性阻抗,单位Omega")
+        self.layout_2.addWidget(self.out_Z0)
+        ##单值输入
         self.Z = QLineEdit()
         self.Z.setPlaceholderText("输入负载阻抗,单位Omega")
-        self.layout_1.addWidget(self.Z)
+        self.layout_2.addWidget(self.Z)
+        ##函数输入
+        self.Z_real = QLineEdit()
+        self.layout_2.addWidget(self.Z_real)
+        self.Z_real.setPlaceholderText("输入函数实部,例如x+1,2,2x,2x+1")
+        self.Z_imag = QLineEdit()
+        self.layout_2.addWidget(self.Z_imag)
+        self.Z_imag.setPlaceholderText("输入函数虚部,例如x+1,2,2x,2x+1")
+        ##计算按钮
         self.calculate = QPushButton("计算")
-        self.layout_1.addWidget(self.calculate)
+        self.layout_2.addWidget(self.calculate)
 
         self.calculate.clicked.connect(self.calculate_circuit)
 
         self.results = QTableWidget()
-        self.layout_1.addWidget(self.results)
+        self.layout_2.addWidget(self.results)
+
+        self.matrix_show = QTableWidget()
+        self.layout_2.addWidget(self.matrix_show)
+
+        self.circle = QLabel()
+        self.layout_2.addWidget(self.circle)
+
+        self.smith_chart = QScrollArea()
+        self.layout_2.addWidget(self.smith_chart)
     
     ##切换主题
     def light_theme(self):
-        
         qdarktheme.setup_theme("light")
     def dark_theme(self):
         qdarktheme.setup_theme("dark")
@@ -331,6 +468,7 @@ class MainWidget(QtWidgets.QWidget):
             self.tl_length.show()
             self.R.hide()
             self.sp.hide()
+        
         else:
             self.tl_Z0.hide()
             self.tl_length.hide()
@@ -343,12 +481,14 @@ class MainWidget(QtWidgets.QWidget):
             self.addbutton.show()
             self.changebutton.hide()
             self.deletebutton.hide()
+
         elif self.temp.currentText() == "修改":
             self.index.show()
             self.addselect.show()
             self.addbutton.hide()
             self.changebutton.show()
             self.deletebutton.hide()
+        
         else:
             self.index.show()
             self.addselect.hide()
@@ -359,6 +499,38 @@ class MainWidget(QtWidgets.QWidget):
             self.addbutton.hide()
             self.changebutton.hide()
             self.deletebutton.show()
+
+        if self.choose.currentText() == "计算散射矩阵":
+            self.Z.hide()
+            self.Z_real.hide()
+            self.Z_imag.hide()
+            self.in_Z0.show()
+            self.out_Z0.show()
+            self.matrix_show.show()
+            self.results.hide()
+            self.circle.hide()
+            self.smith_chart.hide()
+        elif self.choose.currentText() == "单值输入":
+            self.Z.show()
+            self.Z_real.hide()
+            self.Z_imag.hide()
+            self.in_Z0.hide()
+            self.out_Z0.hide()
+            self.matrix_show.hide()
+            self.results.show()
+            self.circle.hide()
+            self.smith_chart.hide()
+        elif self.choose.currentText() == "函数输入":
+            self.Z.hide()
+            self.Z_real.show()
+            self.Z_imag.show()
+            self.in_Z0.hide()
+            self.out_Z0.hide()
+            self.matrix_show.hide()
+            self.results.hide()
+            self.circle.show()
+            self.smith_chart.show()
+
     ##新建电路
     def new_circuit(self):
         self.circuit = circuit()
@@ -378,7 +550,7 @@ class MainWidget(QtWidgets.QWidget):
     def add_element(self):
         if not hasattr(self, "circuit"):
             return
-        
+
         if self.addselect.currentText() == "传输线":
             if self.tl_Z0.text() == "" or self.tl_length.text() == "":
                 return
@@ -454,25 +626,140 @@ class MainWidget(QtWidgets.QWidget):
             self.pic.setWidget(circuit_pic)
     ##计算电路
     def calculate_circuit(self):
-        if not hasattr(self, "circuit"):
-            return
-        if self.Z.text() == "":
-            return
-        Z = complex(self.Z.text())
-        results = calculate(self.circuit, Z)
-        self.results.setRowCount(len(results))
-        self.results.setColumnCount(2)
-        self.results.setHorizontalHeaderLabels(["z", "gamma"])
-        vheaders = [f"item{i}" for i in range(len(results))]
-        self.results.setVerticalHeaderLabels(vheaders)
-        self.results.setColumnWidth(0, 300)
-        self.results.setColumnWidth(1, 300)
+        if self.choose.currentText() == "计算散射矩阵":
+            if not hasattr(self, "circuit"):
+                return
+            if self.in_Z0.text() == "" or self.out_Z0.text() == "":
+                return
+            A = np.eye(2)
+            for element in self.circuit.elements:
+                A = np.dot(element.A, A)
+            
+            A11 = A[0][0]
+            A12 = A[0][1]
+            A21 = A[1][0]
+            A22 = A[1][1]
 
-        for i in range(len(results)):
-            z = QTableWidgetItem("{:.4f}".format(results[i][0]))
-            gamma = QTableWidgetItem("{:.4f}".format(results[i][1]))
-            self.results.setItem(i, 0, z)
-            self.results.setItem(i, 1, gamma)
+            Z2 = complex(self.in_Z0.text())
+            Z1 = complex(self.out_Z0.text())
+
+            a11 = A11*np.sqrt(Z2/Z1)
+            a12 = A12/np.sqrt(Z1*Z2)
+            a21 = A21*np.sqrt(Z1*Z2)
+            a22 = A22*np.sqrt(Z1/Z2)
+
+            num1 = a11+a12+a21+a22
+            s11 = (a11+a12-a21-a22)/num1
+            s12 = 2*(a11*a22-a12*a21)/num1
+            s21 = 2/num1
+            s22 = (-a11+a12-a21+a22)/num1
+
+            self.matrix_show.setRowCount(2)
+            self.matrix_show.setColumnCount(2)
+            self.matrix_show.setHorizontalHeaderLabels(["1", "2"])
+            self.matrix_show.setVerticalHeaderLabels(["1", "2"])
+            self.matrix_show.setColumnWidth(0, 150)
+            self.matrix_show.setColumnWidth(1, 150)
+
+            s11 = QTableWidgetItem("{:.6f}".format(s11))
+            s12 = QTableWidgetItem("{:.6f}".format(s12))
+            s21 = QTableWidgetItem("{:.6f}".format(s21))
+            s22 = QTableWidgetItem("{:.6f}".format(s22))
+
+            self.matrix_show.setItem(0, 0, s11)
+            self.matrix_show.setItem(0, 1, s12)
+            self.matrix_show.setItem(1, 0, s21)
+            self.matrix_show.setItem(1, 1, s22)
+            
+        elif self.choose.currentText() == "单值输入":
+            if not hasattr(self, "circuit"):
+                return
+            if self.Z.text() == "":
+                return
+            Z = complex(self.Z.text())
+            results = calculate(self.circuit, Z)
+            self.results.setRowCount(len(results))
+            self.results.setColumnCount(2)
+            self.results.setHorizontalHeaderLabels(["z", "gamma"])
+            vheaders = [f"item{i}" for i in range(len(results))]
+            self.results.setVerticalHeaderLabels(vheaders)
+            self.results.setColumnWidth(0, 150)
+            self.results.setColumnWidth(1, 150)
+
+            for i in range(len(results)):
+                z = QTableWidgetItem("{:.6f}".format(results[i][0]))
+                gamma = QTableWidgetItem("{:.6f}".format(results[i][1]))
+                self.results.setItem(i, 0, z)
+                self.results.setItem(i, 1, gamma)
+
+        elif self.choose.currentText() == "函数输入":
+            if not hasattr(self, "circuit"):
+                return
+            if self.Z_real.text() == "" and self.Z_imag.text() == "":
+                return
+            real = self.Z_real.text()
+            imag = self.Z_imag.text()
+            func_real = txt2func(real)
+            func_imag = txt2func(imag)
+            xs = [i for i in range(20)]*10
+            gammas = []
+            for x in xs:
+                Z = complex(func_real(x), func_imag(x))
+                results = calculate(self.circuit, Z)
+                gamma = results[-1][1]
+                gammas.append([gamma.real, gamma.imag])
+            
+            gammas = np.array(gammas)
+            xc, yc, R = fit_circle(gammas)
+            ##将圆心和半径显示在界面上
+            ori = complex(xc, yc)
+            ori_str = "{:.6f}".format(ori)
+            R_str = "{:.6f}".format(R)
+            self.circle.setText(f"圆心:{ori_str}\n半径:{R_str}")
+            ##保存高清版的史密斯圆图
+            ori_image = mpimg.imread("pics/ori_smith.png")
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.imshow(ori_image)
+            ori = move([xc, yc])
+            circle = patches.Circle((ori[0], ori[1]), R*970, fill=False, edgecolor='red', linewidth=0.5)
+            ax.add_patch(circle)
+            for i in range(len(gammas)):
+                point = move(gammas[i])
+                ax.plot(point[0], point[1], 'o', color="b", markersize=0.5)
+            
+            ax.set_aspect('equal')
+            ax.set_axis_off()
+            ax.set_xlim(0, 2234)
+            ax.set_ylim(0, 2246)
+            ax.invert_yaxis()
+            plt.savefig("good_smith_chart.png", dpi=500, bbox_inches='tight', pad_inches=0)
+            plt.close()
+
+            ##展示示意的史密斯圆图
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.set_aspect('equal', adjustable='box')
+            ax.axis('off')
+            ax.set_xlim(-1.5, 1.5)
+            ax.set_ylim(-1.5, 1.5)
+
+            circles = np.array([[0.5,0,0.5],[0.25,0,0.75],[0.75,0,0.25],[1,1,1],[1,3,3],[1,0.5,0.5],[1,-1,1],[1,-0.5,0.5],[1,-3,3]])
+            for i in range(len(circles)):
+                circle = patches.Circle((circles[i][0], circles[i][1]), circles[i][2], edgecolor='black', facecolor='none', linewidth=0.5)
+                ax.add_patch(circle)
+            circle = patches.Circle((0, 0), 1, edgecolor='black', facecolor='none')
+            ax.add_patch(circle)
+            for patch in ax.patches:
+                patch.set_clip_path(circle)
+            circle = patches.Circle((xc, yc), R, edgecolor='r', facecolor='none')
+            ax.add_patch(circle)
+            ax.plot(gammas[:, 0], gammas[:, 1], 'o', color="b", markersize=2)
+            plt.savefig("pics/smith_chart.png", bbox_inches='tight')
+            plt.close()
+
+            pic = QPixmap("pics/smith_chart.png")
+            smith_pic = QLabel(self)
+            smith_pic.setPixmap(pic)
+            self.smith_chart.setWidget(smith_pic)
 
 app = QtWidgets.QApplication(sys.argv)
 window = MainWidget()
